@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api/');
-  const isPublicApiRoute = request.nextUrl.pathname.startsWith('/api/auth'); // exclude login/logout
+  const isPublicApiRoute = request.nextUrl.pathname.startsWith('/api/auth'); // exclude login/logout callback
 
   if (isDashboardRoute || (isApiRoute && !isPublicApiRoute)) {
     const sessionToken = request.cookies.get('admin_session')?.value;
@@ -28,9 +28,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/dashboard/:path*',
-    '/api/admin/:path*',
-    '/api/upload/:path*',
-    '/api/download/:path*',
-    '/api/files/:path*',
+    '/api/:path*',
   ],
 };
