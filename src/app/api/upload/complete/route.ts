@@ -77,19 +77,6 @@ export async function POST(request: Request) {
                 const drive = getDriveClient(syncAccount.refresh_token);
                 const googleFileId = firstPart.googleDriveFileId;
 
-                // Set file permission to public so direct download links work in iframe/img
-                try {
-                  await drive.permissions.create({
-                    fileId: googleFileId,
-                    requestBody: {
-                      role: 'reader',
-                      type: 'anyone',
-                    },
-                  });
-                } catch (permErr) {
-                  console.error('Background upload preview sync: failed to set permissions:', permErr);
-                }
-
                 // Retrieve Drive links
                 const driveFile = await drive.files.get({
                   fileId: googleFileId,
@@ -98,8 +85,14 @@ export async function POST(request: Request) {
 
                 const isImage = fileRecord.mime_type?.startsWith('image/');
                 const computedPreviewUrl = driveFile.data.webViewLink?.replace('/view', '/preview') || `https://drive.google.com/file/d/${googleFileId}/preview`;
+                
+                // Use short-lived secure high-res thumbnail link for images
+                const highResThumbnail = driveFile.data.thumbnailLink
+                  ? driveFile.data.thumbnailLink.replace(/=s\d+$/, '=s1600')
+                  : `https://drive.google.com/thumbnail?sz=w1600&id=${googleFileId}`;
+
                 const finalPreviewUrl = isImage 
-                  ? `https://drive.google.com/uc?id=${googleFileId}`
+                  ? highResThumbnail
                   : computedPreviewUrl;
 
                 const finalThumbnailUrl = driveFile.data.thumbnailLink || `https://drive.google.com/thumbnail?sz=w320&id=${googleFileId}`;

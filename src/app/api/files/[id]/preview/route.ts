@@ -23,8 +23,13 @@ export async function GET(request: NextRequest, context: { params: Promise<any> 
 
     if (fileError || !file) throw new Error('File not found');
 
-    // If already cached in DB, return it immediately (< 30ms response!)
-    if (file.preview_url && file.thumbnail_url && file.last_synced_at) {
+    // Check if cache is fresh (< 3 hours old)
+    const isCacheFresh = file.preview_url && 
+                         file.thumbnail_url && 
+                         file.last_synced_at && 
+                         (Date.now() - new Date(file.last_synced_at).getTime() < 3 * 60 * 60 * 1000);
+
+    if (isCacheFresh) {
       let previewUrl = file.preview_url;
       const isImage = file.mime_type?.startsWith('image/');
       
@@ -58,19 +63,6 @@ export async function GET(request: NextRequest, context: { params: Promise<any> 
     // 2. Initialize Google Drive client
     const drive = getDriveClient(refreshToken);
 
-    // 3. Set permission so that anyone with the link can view (allows direct rendering and CDN load)
-    try {
-      await drive.permissions.create({
-        fileId: googleDriveFileId,
-        requestBody: {
-          role: 'reader',
-          type: 'anyone',
-        },
-      });
-    } catch (permError) {
-      console.error('Failed to set public view permission in Drive:', permError);
-    }
-
     // 4. Retrieve webViewLink and thumbnailLink from Google Drive API
     const driveFile = await drive.files.get({
       fileId: googleDriveFileId,
@@ -87,7 +79,7 @@ export async function GET(request: NextRequest, context: { params: Promise<any> 
     // Google provides a high-quality resizeable thumbnailLink (e.g. lh3.googleusercontent.com/...=s220)
     const finalThumbnailUrl = driveFile.data.thumbnailLink || `https://drive.google.com/thumbnail?sz=w320&id=${googleDriveFileId}`;
 
-    // Images can be previewed directly via high-resolution globally cached public Google CDN link
+    // Images can be previewed directly via high-resolution globally cached secure short-lived Google CDN link
     const highResThumbnail = driveFile.data.thumbnailLink
       ? driveFile.data.thumbnailLink.replace(/=s\d+$/, '=s1600')
       : `https://drive.google.com/thumbnail?sz=w1600&id=${googleDriveFileId}`;
