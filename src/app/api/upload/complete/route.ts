@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(request: Request) {
+  let parsedFileId: string | null = null;
   try {
     const { fileId, parts } = await request.json();
+    parsedFileId = fileId;
 
     if (!fileId || !parts || !Array.isArray(parts)) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -121,18 +123,21 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Upload complete error:', error);
     
-    // Log error in db
-    try {
-      const { fileId } = await request.json().catch(() => ({}));
-      if (fileId) {
-         await supabaseAdmin.from('upload_logs').insert({
-            file_id: fileId,
+    // Log error in db safely using parsed outer-scope ID
+    if (parsedFileId) {
+      try {
+        await Promise.all([
+          supabaseAdmin.from('upload_logs').insert({
+            file_id: parsedFileId,
             status: 'error',
-            error_message: error.message
-         });
-         await supabaseAdmin.from('files').update({ status: 'failed' }).eq('id', fileId);
+            error_message: error.message || 'Unknown upload finalization error'
+          }),
+          supabaseAdmin.from('files').update({ status: 'failed' }).eq('id', parsedFileId)
+        ]);
+      } catch (dbErr) {
+        console.error('Failed to log finalization error in DB:', dbErr);
       }
-    } catch(e) {}
+    }
 
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
