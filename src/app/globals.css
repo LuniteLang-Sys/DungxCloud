@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme {
+  --color-canvas: #fffaf0;
+  --color-surface-soft: #faf5e8;
+  --color-surface-card: #f5f0e0;
+  --color-surface-strong: #ebe6d6;
+  --color-ink: #0a0a0a;
+  --color-hairline: #e5e5e5;
+  --color-hairline-soft: #f0f0f0;
+  
+  --color-brand-pink: #ff4d8b;
+  --color-brand-teal: #1a3a3a;
+  --color-brand-lavender: #b8a4ed;
+  --color-brand-peach: #ffb084;
+  --color-brand-ochre: #e8b94a;
+  --color-brand-mint: #a4d4c5;
+  --color-brand-coral: #ff6b5a;
+  
+  --color-background: #fffaf0;
+  --color-foreground: #0a0a0a;
+  --color-card: #f5f0e0;
+  --color-card-foreground: #0a0a0a;
+  --color-popover: #fffaf0;
+  --color-popover-foreground: #0a0a0a;
+  --color-primary: #0a0a0a;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #faf5e8;
+  --color-secondary-foreground: #0a0a0a;
+  --color-muted: #6a6a6a;
+  --color-muted-foreground: #9a9a9a;
+  --color-accent: #faf5e8;
+  --color-accent-foreground: #0a0a0a;
+  --color-destructive: #ef4444;
+  --color-border: #e5e5e5;
+  --color-input: #e5e5e5;
+  --color-ring: #0a0a0a;
+
+  --font-sans: var(--font-inter), var(--font-geist-sans), sans-serif;
+  --font-heading: var(--font-lexend), var(--font-geist-sans), sans-serif;
+  
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+:root {
+  --background: #fffaf0;
+  --foreground: #0a0a0a;
+  --card: #f5f0e0;
+  --card-foreground: #0a0a0a;
+  --popover: #fffaf0;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --secondary: #faf5e8;
+  --secondary-foreground: #0a0a0a;
+  --muted: #6a6a6a;
+  --muted-foreground: #9a9a9a;
+  --accent: #faf5e8;
+  --accent-foreground: #0a0a0a;
+  --destructive: #ef4444;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #0a0a0a;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #fffaf0;
+  --foreground: #0a0a0a;
+  --card: #f5f0e0;
+  --card-foreground: #0a0a0a;
+  --popover: #fffaf0;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --secondary: #faf5e8;
+  --secondary-foreground: #0a0a0a;
+  --muted: #6a6a6a;
+  --muted-foreground: #9a9a9a;
+  --accent: #faf5e8;
+  --accent-foreground: #0a0a0a;
+  --destructive: #ef4444;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #0a0a0a;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading tracking-tight text-ink;
+  }
+}
