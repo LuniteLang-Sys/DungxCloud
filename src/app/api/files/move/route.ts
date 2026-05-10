@@ -10,6 +10,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File ID is required' }, { status: 400 });
     }
 
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(fileId)) {
+      return NextResponse.json({ error: 'Invalid File ID format' }, { status: 400 });
+    }
+
+    if (parentId && !uuidRegex.test(parentId)) {
+      return NextResponse.json({ error: 'Invalid Parent ID format' }, { status: 400 });
+    }
+
     // Basic cycle check: prevent moving a folder into itself
     if (parentId && fileId === parentId) {
       return NextResponse.json({ error: 'Cannot move a folder into itself' }, { status: 400 });
@@ -29,7 +39,11 @@ export async function POST(request: Request) {
       throw new Error('Failed to move file');
     }
 
-    revalidatePath('/dashboard/files');
+    try {
+      revalidatePath('/dashboard/files');
+    } catch (revalErr: any) {
+      console.warn('revalidatePath skipped outside request context:', revalErr.message);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
