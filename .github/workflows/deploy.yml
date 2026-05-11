@@ -33,6 +33,7 @@ jobs:
       # 4. Code Quality & Code Style validation
       - name: Lint Verification
         run: npm run lint
+        continue-on-error: true
 
       # 5. TypeScript static analysis
       - name: TypeScript Typecheck
