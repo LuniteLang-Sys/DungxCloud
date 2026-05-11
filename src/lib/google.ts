@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import { supabaseAdmin } from './supabase';
 import crypto from 'crypto';
+import { logger } from './logger';
+import { metricsRegistry } from './metrics';
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -83,56 +85,128 @@ export function getGoogleAuthClient(refreshToken: string) {
 // Global in-memory cache to avoid querying Google's OAuth server on every file preview request (saves ~500ms of latency per query)
 const tokenCache = new Map<string, { token: string; expiryTime: number }>();
 
-export async function getCachedAccessToken(refreshToken: string): Promise<string> {
+export async function getCachedAccessToken(refreshToken: string, traceId?: string): Promise<string> {
   const cached = tokenCache.get(refreshToken);
   const now = Date.now();
   
   if (cached && cached.expiryTime > now + 120 * 1000) { // 2 minutes buffer
+    logger.debug('Token cache hit', {
+      trace_id: traceId,
+      token_expiry_diff_seconds: Math.round((cached.expiryTime - now) / 1000),
+    });
     return cached.token;
   }
   
+  const startTime = performance.now();
   const client = getGoogleAuthClient(refreshToken);
-  const res = await client.getAccessToken();
-  const token = res.token;
-  if (!token) throw new Error('Failed to retrieve access token');
   
-  const expiryTime = client.credentials.expiry_date || (now + 3500 * 1000);
-  
-  tokenCache.set(refreshToken, {
-    token,
-    expiryTime,
-  });
-  
-  return token;
+  try {
+    const res = await client.getAccessToken();
+    const token = res.token;
+    if (!token) {
+      metricsRegistry.tokenRefreshFailures.inc();
+      logger.error('Failed to retrieve access token from Google OAuth', {
+        trace_id: traceId,
+        duration_ms: Math.round(performance.now() - startTime),
+      });
+      throw new Error('Failed to retrieve access token');
+    }
+    
+    const durationMs = Math.round(performance.now() - startTime);
+    metricsRegistry.googleOauthLatency.observe(durationMs / 1000); // observe in seconds
+    logger.info('Token cache miss - Google OAuth token refreshed', {
+      trace_id: traceId,
+      duration_ms: durationMs,
+    });
+    
+    const expiryTime = client.credentials.expiry_date || (now + 3500 * 1000);
+    
+    tokenCache.set(refreshToken, {
+      token,
+      expiryTime,
+    });
+    
+    return token;
+  } catch (err: any) {
+    metricsRegistry.tokenRefreshFailures.inc();
+    throw err;
+  }
 }
 
-export async function refreshAccountQuota(accountId: string, refreshToken: string) {
+export async function refreshAccountQuota(accountId: string, refreshToken: string, traceId?: string) {
+  const startTime = performance.now();
+  logger.info('Storage quota synchronization started', {
+    trace_id: traceId,
+    account_id: accountId,
+  });
+
   try {
     const drive = getDriveClient(refreshToken);
     const res = await drive.about.get({ fields: 'storageQuota' });
     const quota = res.data.storageQuota;
-    if (!quota) return;
+    if (!quota) {
+      logger.warn('Google Drive returned empty storageQuota metadata', {
+        trace_id: traceId,
+        account_id: accountId,
+      });
+      return;
+    }
 
     const limit = parseInt(quota.limit || '16106127360', 10); // Default 15GB if not found
     const usage = parseInt(quota.usageInDrive || quota.usage || '0', 10);
     const remainingStorage = limit - usage;
+    const healthStatus = remainingStorage < 100 * 1024 * 1024 ? 'quota_exceeded' : 'healthy';
 
     const { error } = await supabaseAdmin
       .from('accounts')
       .update({
         remaining_storage: remainingStorage,
-        health_status: remainingStorage < 100 * 1024 * 1024 ? 'quota_exceeded' : 'healthy', // warn if < 100MB
+        health_status: healthStatus,
         token_status: 'active',
         updated_at: new Date().toISOString(),
       })
       .eq('id', accountId);
 
+    const durationMs = Math.round(performance.now() - startTime);
+
     if (error) {
-      console.error(`Failed to update account quota in DB for ${accountId}:`, error);
+      metricsRegistry.quotaSyncFailures.inc();
+      logger.error('Failed to save synchronized account quota in database', {
+        trace_id: traceId,
+        account_id: accountId,
+        duration_ms: durationMs,
+        error: error.message,
+      });
+    } else {
+      logger.info('Account quota synchronized successfully', {
+        trace_id: traceId,
+        account_id: accountId,
+        duration_ms: durationMs,
+        limit_bytes: limit,
+        usage_bytes: usage,
+        remaining_bytes: remainingStorage,
+        health_status: healthStatus,
+      });
     }
   } catch (error: any) {
-    console.error(`Failed to refresh quota for account ${accountId}:`, error);
-    if (error.status === 400 || error.status === 401 || error.message?.includes('invalid_grant')) {
+    metricsRegistry.quotaSyncFailures.inc();
+    const durationMs = Math.round(performance.now() - startTime);
+    logger.error('Failed to retrieve or refresh account quota', {
+      trace_id: traceId,
+      account_id: accountId,
+      duration_ms: durationMs,
+      error: error.message || error,
+    });
+
+    const isRevoked = error.status === 400 || error.status === 401 || error.message?.includes('invalid_grant');
+    if (isRevoked) {
+      logger.fatal('Google Account credentials revoked or expired', {
+        trace_id: traceId,
+        account_id: accountId,
+        google_error_status: error.status,
+        google_error_reason: error.message,
+      });
+
       await supabaseAdmin
         .from('accounts')
         .update({

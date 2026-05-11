@@ -1,0 +1,55 @@
+# monitoring/alert_rules.yml
+# Alertmanager rules for Google Drive Multi-Account NAS.
+
+groups:
+  - name: smart_cloud_pool_alerts
+    rules:
+      # 1. Accounts Health
+      - alert: GoogleAccountCredentialsRevoked
+        expr: nas_unhealthy_accounts_total > 0
+        for: 0m
+        labels:
+          severity: fatal
+        annotations:
+          summary: "Google Account access revoked on storage shard"
+          description: "One or more Google Drive accounts has revoked authorization or expired. Client uploads/downloads will fail. Immediate re-authentication required."
+
+      # 2. Upload Performance & Success Rate
+      - alert: UploadSuccessRateDrop
+        expr: (sum(rate(nas_upload_attempts_total{status="completed"}[5m])) / sum(rate(nas_upload_attempts_total[5m]))) * 100 < 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "File upload success rate dropped below 95%"
+          description: "Sustained upload failures detected on client transfers. Check local network, API quotas, or file lock states."
+
+      # 3. Download Silent Stream Corruptions
+      - alert: SilentStreamCorruptionDetected
+        expr: increase(nas_corrupted_downloads_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: fatal
+        annotations:
+          summary: "Silent stream corruption caught during file download"
+          description: "Client completed download stream but byte integrity verification failed. Potential bit rot or split assembly mismatch. Check accounts storage."
+
+      # 4. Database Stability
+      - alert: PostgresDeadlocksDetected
+        expr: increase(nas_postgres_deadlocks_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database deadlock detected in postgres transactions"
+          description: "Query execution lock has occurred in Supabase database. Action needed to kill blocked PID sessions."
+
+      # 5. Storage Exhaustion Forecast
+      - alert: StorageQuotaNearExhaustion
+        expr: (nas_total_storage_bytes{state="used"} / nas_total_storage_bytes{state="total"}) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Distributed Storage pool capacity is over 90%"
+          description: "The aggregated storage pool is near full capacity. SRE should connect an additional Google Drive account to expand storage limits."

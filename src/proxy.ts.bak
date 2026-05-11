@@ -1,0 +1,4 @@
+// This file has been deprecated and successfully refactored to src/middleware.ts.
+// Next.js requires the global middleware file to be named exactly 'middleware.ts' 
+// located directly in the root or the 'src/' folder to be automatically detected.
+// All routing protections, request logging, and trace-context propagation are now handled there.

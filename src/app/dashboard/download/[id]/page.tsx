@@ -21,10 +21,45 @@ export default function DownloadPage() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<'idle' | 'downloading' | 'completed' | 'error'>('idle');
 
+  // Helper to push high-frequency client-side metrics
+  const pushTelemetry = async (type: string, labels: any = {}, amount = 1) => {
+    try {
+      await fetch('/api/metrics/collect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          events: [{ type, labels, amount }]
+        })
+      });
+    } catch (e) {
+      console.warn('Telemetry delivery failed', e);
+    }
+  };
+
+  // Generate client-side standard W3C trace context
+  const generateW3CTrace = () => {
+    const hex = (size: number) => {
+      const arr = new Uint8Array(size);
+      window.crypto.getRandomValues(arr);
+      return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+    };
+    return {
+      traceId: hex(16),
+      spanId: hex(8),
+    };
+  };
+
   useEffect(() => {
     async function init() {
+      const trace = generateW3CTrace();
+      const traceparent = `00-${trace.traceId}-${trace.spanId}-01`;
+
       try {
-        const res = await fetch(`/api/download/${fileId}/init`);
+        const res = await fetch(`/api/download/${fileId}/init`, {
+          headers: {
+            'traceparent': traceparent,
+          },
+        });
         if (!res.ok) {
           const errData = await res.json();
           throw new Error(errData.error || 'Failed to init download');
@@ -48,7 +83,15 @@ export default function DownloadPage() {
     setStatus('downloading');
     setProgress(0);
 
+    const downloadSessionTrace = generateW3CTrace();
+    const traceparent = `00-${downloadSessionTrace.traceId}-${downloadSessionTrace.spanId}-01`;
+
+    let downloadedBytes = 0;
+    let transferStarted = false;
+
     try {
+      await pushTelemetry('download_attempt', { file_id: fileId, file_name: fileData.name, total_parts: parts.length });
+
       // Dynamically import streamsaver to bypass server-side Node evaluation (SSR)
       // @ts-ignore
       const streamSaver = (await import('streamsaver')).default;
@@ -59,15 +102,20 @@ export default function DownloadPage() {
       });
 
       const writer = fileStream.getWriter();
-      let downloadedBytes = 0;
+      transferStarted = true;
 
       // 2. Fetch and pipe each part sequentially
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
         
-        // Fetch fresh access token right before downloading the chunk
-        const tokenRes = await fetch(`/api/download/${fileId}/token?partNumber=${part.partNumber}`);
+        // Fetch fresh access token right before downloading the chunk, propagating the download session trace
+        const tokenRes = await fetch(`/api/download/${fileId}/token?partNumber=${part.partNumber}`, {
+          headers: {
+            'traceparent': traceparent,
+          },
+        });
         if (!tokenRes.ok) {
+          await pushTelemetry('download_token_failure', { file_id: fileId, part_number: part.partNumber });
           const errData = await tokenRes.json().catch(() => ({}));
           throw new Error(errData.error || `Failed to retrieve access token for chunk ${part.partNumber}`);
         }
@@ -98,9 +146,19 @@ export default function DownloadPage() {
       }
 
       await writer.close();
+
+      // Check stream integrity / corruption rate
+      if (downloadedBytes !== fileData.size) {
+        await pushTelemetry('download_corruption', { file_id: fileId, expected_bytes: fileData.size, actual_bytes: downloadedBytes });
+        throw new Error(`Data stream integrity error: bytes received (${downloadedBytes}) do not match file manifest (${fileData.size})`);
+      }
+
       setStatus('completed');
     } catch (err: any) {
       console.error('Download error:', err);
+      if (transferStarted) {
+        await pushTelemetry('download_interruption', { file_id: fileId, downloaded_bytes: downloadedBytes, expected_bytes: fileData.size });
+      }
       setError(err.message);
       setStatus('error');
     } finally {

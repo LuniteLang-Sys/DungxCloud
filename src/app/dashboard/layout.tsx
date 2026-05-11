@@ -1,9 +1,71 @@
 'use client';
 
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Cloud, HardDrive, LayoutDashboard, LogOut, Settings, User, History } from 'lucide-react';
 import { motion, LayoutGroup } from 'framer-motion';
+
+interface Props {
+  children: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+}
+
+class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(_: Error): State {
+    return { hasError: true };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+    // Push crash report to telemetry gateway
+    fetch('/api/metrics/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        events: [{
+          type: 'frontend_crash',
+          labels: {
+            message: error.message,
+            stack: error.stack?.substring(0, 300),
+            componentStack: errorInfo.componentStack?.substring(0, 300)
+          }
+        }]
+      })
+    }).catch(e => console.warn('Telemetry delivery failed', e));
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center p-8 bg-surface-card border-2 border-black rounded-2xl shadow-[6px_6px_0px_#000000] max-w-md mx-auto space-y-4 font-sans antialiased">
+          <div className="bg-brand-pink/10 border-2 border-brand-pink p-3 rounded-full">
+            <Cloud className="w-8 h-8 text-brand-pink" />
+          </div>
+          <h2 className="text-xl font-heading font-black text-black">Interface Crash Intercepted</h2>
+          <p className="text-xs text-[#5a5a5a] font-bold leading-relaxed">
+            A critical UI runtime error was caught. The incident has been automatically reported to the Site Reliability Engineering team.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-brand-pink hover:bg-rose-400 text-black border-2 border-black px-5 py-2.5 rounded-xl text-xs font-heading font-black shadow-[2px_2px_0px_#000000] active:translate-y-[1px] active:shadow-none transition-all cursor-pointer"
+          >
+            Reload Client Interface
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -131,7 +193,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             transition={{ duration: 0.15, ease: 'easeOut' }}
             className="h-full"
           >
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </motion.div>
         </div>
       </main>

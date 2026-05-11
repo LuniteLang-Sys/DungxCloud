@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Lexend } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import "@/lib/env"; // Enforce startup environment checks
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

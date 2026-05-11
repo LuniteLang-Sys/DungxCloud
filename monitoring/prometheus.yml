@@ -1,0 +1,24 @@
+# monitoring/prometheus.yml
+# Production Prometheus configuration for Smart Cloud Pool NAS.
+
+global:
+  scrape_interval: 15s # Frequency to scrape targets
+  evaluation_interval: 15s # Frequency to evaluate alerting rules
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "localhost:9093"
+
+# Load and evaluate alerting rules
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  - job_name: "smart-cloud-pool"
+    metrics_path: "/api/metrics"
+    static_configs:
+      - targets: ["localhost:3000"] # Change to production hostname if deployed

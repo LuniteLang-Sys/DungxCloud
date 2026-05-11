@@ -44,10 +44,46 @@ export default function DashboardPage() {
     updateUploadStatus(uploadItem.id, { status: 'uploading', progress: 0 });
     const file = uploadItem.file;
 
+    // Helper to push high-frequency client-side metrics
+    const pushTelemetry = async (type: string, labels: any = {}, amount = 1) => {
+      try {
+        await fetch('/api/metrics/collect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            events: [{ type, labels, amount }]
+          })
+        });
+      } catch (e) {
+        console.warn('Telemetry delivery failed', e);
+      }
+    };
+
+    // Generate client-side standard W3C trace context
+    const generateW3CTrace = () => {
+      const hex = (size: number) => {
+        const arr = new Uint8Array(size);
+        window.crypto.getRandomValues(arr);
+        return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+      };
+      return {
+        traceId: hex(16),
+        spanId: hex(8),
+      };
+    };
+
+    const trace = generateW3CTrace();
+    const traceparent = `00-${trace.traceId}-${trace.spanId}-01`;
+
     try {
+      await pushTelemetry('upload_attempt', { file_name: file.name, is_split: file.size > 15 * 1024 * 1024 });
+
       const initRes = await fetch('/api/upload/init', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'traceparent': traceparent,
+        },
         body: JSON.stringify({
           filename: file.name,
           mimeType: file.type || 'application/octet-stream',
@@ -77,10 +113,12 @@ export default function DashboardPage() {
         let attempts = 0;
         while (attempts < maxAttempts) {
           try {
-            return await new Promise<any>((resolve, reject) => {
+            const res = await new Promise<any>((resolve, reject) => {
               const xhr = new XMLHttpRequest();
               xhr.open('PUT', session.uploadUrl, true);
               xhr.setRequestHeader('Content-Range', `bytes 0-${session.size - 1}/${session.size}`);
+              // Google Drive allows custom headers in resumes. We inject our trace parent for operational logging.
+              xhr.setRequestHeader('traceparent', traceparent);
               
               let lastLoaded = 0;
               xhr.upload.onprogress = (e) => {
@@ -114,8 +152,14 @@ export default function DashboardPage() {
               xhr.onerror = () => reject(new Error('Network error during upload'));
               xhr.send(chunk);
             });
+
+            if (attempts > 0) {
+              await pushTelemetry('upload_recovery', { file_name: file.name, part_number: session.partNumber });
+            }
+            return res;
           } catch (err) {
             attempts++;
+            await pushTelemetry('chunk_retry', { file_name: file.name, part_number: session.partNumber });
             if (attempts >= maxAttempts) throw err;
             const delay = Math.pow(2, attempts) * 1000; // Exponential backoff retry delay
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -126,7 +170,7 @@ export default function DashboardPage() {
       // 3. Pool throttling execution (max 2 concurrent uploads to avoid browser and bandwidth choking)
       const CONCURRENT_LIMIT = 2;
       const partsResult = new Array(sessions.length);
-      const queue = chunksToUpload.map((item, index) => ({ ...item, index }));
+      const queue = chunksToUpload.map((item: any, index: number) => ({ ...item, index }));
       
       const workers = Array(Math.min(CONCURRENT_LIMIT, queue.length)).fill(null).map(async () => {
         while (queue.length > 0) {
@@ -141,7 +185,10 @@ export default function DashboardPage() {
 
       const completeRes = await fetch('/api/upload/complete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'traceparent': traceparent,
+        },
         body: JSON.stringify({ fileId, parts: partsResult }),
       });
 

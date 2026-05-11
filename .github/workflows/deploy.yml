@@ -1,0 +1,71 @@
+# .github/workflows/deploy.yml
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout codebase
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js pinned version 20
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # 3. Clean install dependencies
+      - name: Install Dependencies
+        run: npm ci
+
+      # 4. Code Quality & Code Style validation
+      - name: Lint Verification
+        run: npm run lint
+
+      # 5. TypeScript static analysis
+      - name: TypeScript Typecheck
+        run: npx tsc --noEmit
+
+      # 6. Run unit tests if configured, or run compile validation tests
+      - name: Run Build Tests
+        run: |
+          if npm run | grep -q "test"; then
+            npm run test
+          else
+            echo "No test scripts configured in package.json. Skipping testing."
+          fi
+
+      # 7. Production compilation validation with environment safety bypasses
+      - name: Verify Build Compiles
+        env:
+          SKIP_ENV_VALIDATION: 'true'
+          NEXT_PUBLIC_SUPABASE_URL: 'https://iykapuisyiynmqipjhcn.supabase.co' # dummy compile-time env
+        run: npm run build
+
+      # 8. Deploy directly to Vercel production on branch push only
+      - name: Continuous Deployment to Vercel
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm install --global vercel@latest
+          echo "Pulling latest Vercel settings..."
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          echo "Building production bundle via Vercel CLI..."
+          vercel build --prod --token=$VERCEL_TOKEN
+          echo "Publishing prebuilt bundle live..."
+          vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
