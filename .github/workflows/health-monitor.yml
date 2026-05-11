@@ -20,7 +20,7 @@ jobs:
             echo "❌ CRITICAL CONFIGURATION FAILURE"
             echo "=========================================================================="
             echo "Your GitHub Actions Secrets are incomplete! Please configure:"
-            echo "  - PRODUCTION_URL (e.g., https://your-nas-app.vercel.app)"
+            echo "  - PRODUCTION_URL (e.g., https://your-nas-app.up.railway.app)"
             echo "=========================================================================="
             exit 1
           fi

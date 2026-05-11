@@ -56,18 +56,13 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: 'dummy-service-key-for-compilation'
         run: npm run build
 
-      # 8. Deploy directly to Vercel production on branch push only
-      - name: Continuous Deployment to Vercel
+      # 8. Deploy directly to Railway production on branch push only
+      - name: Continuous Deployment to Railway
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          npm install --global vercel@latest
-          echo "Pulling latest Vercel settings..."
-          vercel pull --yes --environment=production --token=$VERCEL_TOKEN
-          echo "Building production bundle via Vercel CLI..."
-          vercel build --prod --token=$VERCEL_TOKEN
-          echo "Publishing prebuilt bundle live..."
-          vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+          npm install --global @railway/cli
+          echo "Uploading code and triggering deployment to Railway..."
+          railway up --detach
+

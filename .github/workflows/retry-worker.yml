@@ -21,8 +21,8 @@ jobs:
             echo "❌ CRITICAL CONFIGURATION FAILURE"
             echo "=========================================================================="
             echo "Your GitHub Actions Secrets are incomplete! Please configure:"
-            echo "  - PRODUCTION_URL (e.g., https://your-nas-app.vercel.app)"
-            echo "  - CRON_SECRET (matching the CRON_SECRET value set in Vercel)"
+            echo "  - PRODUCTION_URL (e.g., https://your-nas-app.up.railway.app)"
+            echo "  - CRON_SECRET (matching the CRON_SECRET value set in Railway)"
             echo "=========================================================================="
             exit 1
           fi
