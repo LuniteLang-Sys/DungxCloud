@@ -53,6 +53,7 @@ jobs:
         env:
           SKIP_ENV_VALIDATION: 'true'
           NEXT_PUBLIC_SUPABASE_URL: 'https://iykapuisyiynmqipjhcn.supabase.co' # dummy compile-time env
+          SUPABASE_SERVICE_ROLE_KEY: 'dummy-service-key-for-compilation'
         run: npm run build
 
       # 8. Deploy directly to Vercel production on branch push only
