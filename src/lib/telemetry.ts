@@ -2,8 +2,6 @@
 // Telemetry and Context Propagation Helpers implementing W3C Trace Context specifications.
 // format: 00-{traceId}-{spanId}-{traceFlags}
 
-import crypto from 'crypto';
-
 export interface TraceContext {
   traceId: string;
   spanId: string;
@@ -11,12 +9,28 @@ export interface TraceContext {
 
 /**
  * Generates a standard cryptographically random W3C compliant TraceContext
+ * Utilizes web-standard globalThis.crypto to remain fully compatible with Edge runtimes.
  */
 export function generateTraceContext(): TraceContext {
-  // 16 bytes for trace ID (32 hex characters)
-  const traceId = crypto.randomBytes(16).toString('hex');
-  // 8 bytes for span ID (16 hex characters)
-  const spanId = crypto.randomBytes(8).toString('hex');
+  const bytes16 = new Uint8Array(16);
+  const bytes8 = new Uint8Array(8);
+  
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes16);
+    globalThis.crypto.getRandomValues(bytes8);
+  } else {
+    // Hard fallback for environments lacking standard crypto support
+    for (let i = 0; i < 16; i++) {
+      bytes16[i] = Math.floor(Math.random() * 256);
+    }
+    for (let i = 0; i < 8; i++) {
+      bytes8[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  
+  const traceId = Array.from(bytes16).map(b => b.toString(16).padStart(2, '0')).join('');
+  const spanId = Array.from(bytes8).map(b => b.toString(16).padStart(2, '0')).join('');
+  
   return { traceId, spanId };
 }
 
@@ -52,9 +66,16 @@ export function formatTraceparent(context: TraceContext): string {
  * Extracts correlation IDs from standard Next.js request headers or creates a fresh trace
  */
 export function extractTraceContext(headers: Headers): { trace_id: string; span_id: string; request_id: string } {
-  const requestId = headers.get('x-request-id') || crypto.randomUUID();
-  const traceparent = headers.get('traceparent');
+  let requestId = headers.get('x-request-id');
+  if (!requestId) {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto?.randomUUID) {
+      requestId = globalThis.crypto.randomUUID();
+    } else {
+      requestId = 'req-' + Math.random().toString(36).substring(2, 11);
+    }
+  }
   
+  const traceparent = headers.get('traceparent');
   const parsed = parseTraceparent(traceparent);
   if (parsed) {
     return {
@@ -72,3 +93,4 @@ export function extractTraceContext(headers: Headers): { trace_id: string; span_
     request_id: requestId,
   };
 }
+
