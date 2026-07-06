@@ -13,7 +13,7 @@ export async function GET() {
   try {
     // 1. Query accounts & files summary
     const [accountsRes, filesRes] = await Promise.all([
-      supabaseAdmin.from('accounts').select('id, email, remaining_storage, token_status, health_status'),
+      supabaseAdmin.from('accounts').select('id, email, total_storage, remaining_storage, token_status, health_status'),
       supabaseAdmin.from('files').select('size, status')
     ]);
 
@@ -24,10 +24,11 @@ export async function GET() {
     const accounts = accountsRes.data || [];
     const files = filesRes.data || [];
 
-    // 2. Aggregate capacities
-    // Each Google Drive account has roughly 15GB by default (16106127360 bytes)
-    const googleAccountCapacityBytes = 15 * 1024 * 1024 * 1024; // 15GB virtual capacity per drive
-    const totalCapacityBytes = accounts.length * googleAccountCapacityBytes;
+    // 2. Aggregate capacities dynamically
+    const totalCapacityBytes = accounts.reduce(
+      (acc, curr) => acc + Number(curr.total_storage || 15 * 1024 * 1024 * 1024),
+      0
+    );
 
     const remainingStorageBytes = accounts.reduce(
       (acc, curr) => acc + Number(curr.remaining_storage || 0),

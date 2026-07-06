@@ -160,6 +160,7 @@ export async function refreshAccountQuota(accountId: string, refreshToken: strin
     const { error } = await supabaseAdmin
       .from('accounts')
       .update({
+        total_storage: limit,
         remaining_storage: remainingStorage,
         health_status: healthStatus,
         token_status: 'active',

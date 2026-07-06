@@ -11,14 +11,18 @@ export async function GET() {
   try {
     // Dynamically calculate database aggregates to keep stats fresh on scrapings
     const [accountsRes, filesRes, unhealthyRes] = await Promise.all([
-      supabaseAdmin.from('accounts').select('remaining_storage'),
+      supabaseAdmin.from('accounts').select('remaining_storage, total_storage'),
       supabaseAdmin.from('files').select('size'),
       supabaseAdmin.from('accounts').select('id').or('health_status.neq.healthy,token_status.neq.active')
     ]);
 
     // Aggregate storage metrics dynamically
     if (accountsRes.data) {
+      const totalCapacityBytes = accountsRes.data.reduce((acc, current) => acc + Number(current.total_storage || 15 * 1024 * 1024 * 1024), 0);
       const totalRemainingBytes = accountsRes.data.reduce((acc, current) => acc + Number(current.remaining_storage || 0), 0);
+      
+      // We set total capacity and available 
+      metricsRegistry.totalStorageBytes.set(totalCapacityBytes, { state: 'capacity' });
       metricsRegistry.totalStorageBytes.set(totalRemainingBytes, { state: 'available' });
     }
 

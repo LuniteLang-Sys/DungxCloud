@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS public.accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL UNIQUE,
   remaining_storage BIGINT DEFAULT 0,
+  total_storage BIGINT DEFAULT 16106127360,
   token_status TEXT DEFAULT 'active', -- active, expired, error
   health_status TEXT DEFAULT 'healthy', -- healthy, quota_exceeded
   refresh_token TEXT,

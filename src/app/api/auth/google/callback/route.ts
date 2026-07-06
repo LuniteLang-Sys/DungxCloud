@@ -25,13 +25,15 @@ export async function GET(request: Request) {
     // Get remaining storage quota
     const driveRes = await oauth2Client.request({ url: 'https://www.googleapis.com/drive/v3/about?fields=storageQuota' });
     const quota = (driveRes.data as any).storageQuota;
-    const remainingStorage = parseInt(quota.limit, 10) - parseInt(quota.usageInDrive || quota.usage, 10);
+    const totalStorage = parseInt(quota.limit || '16106127360', 10);
+    const remainingStorage = totalStorage - parseInt(quota.usageInDrive || quota.usage || '0', 10);
 
     // Upsert into Supabase
     const { error } = await supabaseAdmin.from('accounts').upsert(
       {
         email,
         refresh_token: tokens.refresh_token ? encrypt(tokens.refresh_token) : undefined, // keep existing if not provided
+        total_storage: totalStorage,
         remaining_storage: remainingStorage,
         token_status: 'active',
         health_status: 'healthy',

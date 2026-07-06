@@ -15,14 +15,13 @@ export default async function AccountsPage() {
 
   const totalAccounts = accounts?.length || 0;
   
-  // Each Google Drive free tier account has a fixed 15 GB quota
-  const G_LIMIT = 15 * 1024 * 1024 * 1024; // 15 GB in bytes
-  const totalLimit = totalAccounts * G_LIMIT;
+  const totalLimit = accounts?.reduce((sum, acc) => sum + Number(acc.total_storage || 15 * 1024 * 1024 * 1024), 0) || 0;
 
-  // Calculate used storage for each account dynamically (15GB - remaining_storage)
+  // Calculate used storage for each account dynamically (total_storage - remaining_storage)
   const totalUsed = accounts?.reduce((sum, acc) => {
+    const total = Number(acc.total_storage || 15 * 1024 * 1024 * 1024);
     const remaining = Number(acc.remaining_storage || 0);
-    const used = Math.max(0, G_LIMIT - remaining);
+    const used = Math.max(0, total - remaining);
     return sum + used;
   }, 0) || 0;
 
@@ -101,9 +100,10 @@ export default async function AccountsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {(accounts || []).map((account, idx) => {
             const color = cardSaturatedColors[idx % cardSaturatedColors.length];
+            const totalAccLimit = Number(account.total_storage || 15 * 1024 * 1024 * 1024);
             const remaining = Number(account.remaining_storage || 0);
-            const used = Math.max(0, G_LIMIT - remaining);
-            const pct = Math.round((used / G_LIMIT) * 100);
+            const used = Math.max(0, totalAccLimit - remaining);
+            const pUsed = totalAccLimit > 0 ? Math.round((used / totalAccLimit) * 100) : 0;
 
             return (
               <Card 
@@ -147,7 +147,7 @@ export default async function AccountsPage() {
                       </div>
                       <div className="flex justify-between text-xs font-black text-black">
                         <span>Max Allotted:</span>
-                        <span className="font-mono">{formatBytes(G_LIMIT)}</span>
+                        <span className="font-mono">{formatBytes(totalAccLimit)}</span>
                       </div>
                     </div>
                   </div>
@@ -156,10 +156,10 @@ export default async function AccountsPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-heading font-black uppercase tracking-widest text-black/70">Allocation Capacity</span>
-                      <span className="text-xs font-black font-mono text-black">{pct}%</span>
+                      <span className="text-xs font-black font-mono text-black">{pUsed}%</span>
                     </div>
                     <Progress 
-                      value={pct} 
+                      value={pUsed} 
                       className="h-3 bg-canvas border-2 border-black rounded-full overflow-hidden" 
                       indicatorClassName="bg-black" 
                     />
