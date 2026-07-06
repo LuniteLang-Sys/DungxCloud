@@ -17,16 +17,7 @@ const CURRENT_LEVEL_NUM = LOG_LEVELS[CURRENT_LEVEL] || 20;
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Safe reference to global Sentry (if initialized)
-let SentryInstance: any = null;
-if (typeof window === 'undefined') {
-  // Server-side dynamic Sentry resolution
-  try {
-    SentryInstance = require('@sentry/nextjs');
-  } catch {
-    // Sentry not loaded yet
-  }
-}
+
 
 // Color helpers for beautiful local dev logs
 const colors = {
@@ -106,28 +97,7 @@ function writeLog(level: LogLevel, message: string, context?: any) {
 
   console.log(JSON.stringify(payload));
 
-  // Integrate with Sentry in production for warning, error, and fatal events
-  if (levelNum >= 30) {
-    try {
-      if (SentryInstance) {
-        SentryInstance.withScope((scope: any) => {
-          // Set custom context attributes as tags
-          if (cleanContext.file_id) scope.setTag('file_id', cleanContext.file_id);
-          if (cleanContext.account_id) scope.setTag('account_id', cleanContext.account_id);
-          if (cleanContext.part_number) scope.setTag('part_number', cleanContext.part_number);
-          if (cleanContext.trace_id) scope.setTag('trace_id', cleanContext.trace_id);
-          
-          if (cleanContext.error) {
-            SentryInstance.captureException(cleanContext.error);
-          } else {
-            SentryInstance.captureMessage(message, level === 'WARN' ? 'warning' : 'error');
-          }
-        });
-      }
-    } catch {
-      // Sentry send failure should never crash the main application thread
-    }
-  }
+
 }
 
 export const logger = {
