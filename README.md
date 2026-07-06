@@ -1,8 +1,8 @@
 # Google Drive Multi-Account NAS ("Poor Man's NAS")
 
-Một hệ thống lưu trữ đám mây tự vận hành (self-hosted), hợp nhất và tổng hợp dung lượng từ nhiều tài khoản Google Drive miễn phí thành một không gian lưu trữ ảo duy nhất (Unified Storage Pool). 
+Một hệ thống lưu trữ đám mây tự vận hành (self-hosted), hợp nhất và tổng hợp dung lượng từ nhiều tài khoản Google Drive miễn phí thành một không gian lưu trữ ảo duy nhất (Unified Storage Pool).
 
-Dự án được tối ưu hóa về mặt kiến trúc để vận hành trên các máy chủ có tài nguyên cực kỳ hạn chế (ví dụ: VPS 1 vCPU, 1GB RAM) bằng cách ủy quyền toàn bộ quá trình truyền tải dữ liệu (data plane) cho client, giúp máy chủ hoàn toàn không tốn tài nguyên băng thông hay RAM khi trung chuyển tệp tin lớn.
+Dự án được xây dựng trên **Next.js 16 + Supabase**, triển khai trên **Vercel Serverless**. Kiến trúc tách biệt hoàn toàn Control Plane (Next.js API Routes) và Data Plane (Google Drive CDN), giúp ứng dụng không tốn bất kỳ băng thông hay RAM máy chủ nào khi trung chuyển dữ liệu.
 
 ---
 
@@ -16,7 +16,7 @@ graph TD
         XHR[Parallel XMLHttpRequests]
     end
 
-    subgraph Server [Máy Chủ Next.js]
+    subgraph Server [Vercel Serverless Functions]
         API[Stateless API Routes / Control Plane]
         TC[In-memory Token Cache]
     end
@@ -66,7 +66,9 @@ graph TD
 ## 🚀 Hướng Dẫn Cài Đặt Nhanh (Quick Start)
 
 ### 1. Cấu hình biến môi trường (`.env.local`)
-Sao chép `.env.example` thành `.env.local` và điền đầy đủ các thông số:
+
+Tạo tệp `.env.local` ở thư mục gốc và điền đầy đủ các thông số:
+
 ```bash
 NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
@@ -77,20 +79,66 @@ GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/google/callback"
 
 ADMIN_PASSWORD="your-admin-dashboard-password"
 JWT_SECRET="your-jwt-signing-secret"
+ENCRYPTION_SECRET="your-random-encryption-secret-32-chars"
 
 # Kích thước tối đa của mỗi mảnh tệp tin (mặc định 1GB)
 CHUNK_SIZE=1073741824
 ```
 
-### 2. Thiết lập cơ sở dữ liệu
-Truy cập **SQL Editor** trong bảng điều khiển Supabase của bạn, sao chép nội dung trong tệp [supabase/schema.sql](file:///c:/Users/Dungx/Desktop/DungxDownload/supabase/schema.sql) để tạo lập các bảng thông tin, ràng buộc khóa ngoại và kích hoạt tính năng bảo mật Row Level Security (RLS).
+### 2. Thiết lập cơ sở dữ liệu (nếu chưa có)
+
+Truy cập **SQL Editor** trong bảng điều khiển Supabase của bạn và chạy nội dung trong tệp `supabase/schema.sql` để tạo lập các bảng thông tin, ràng buộc khóa ngoại và kích hoạt tính năng bảo mật Row Level Security (RLS).
 
 ### 3. Cài đặt dependency và chạy local
+
 ```powershell
 npm install
 npm run dev
 ```
+
 Truy cập [http://localhost:3000](http://localhost:3000) trên trình duyệt để sử dụng ứng dụng.
+
+---
+
+## ☁️ Triển Khai Lên Vercel (Deployment)
+
+### Bước 1: Đẩy mã nguồn lên GitHub
+
+Đảm bảo repo của bạn đã được push lên GitHub (hoặc GitLab/Bitbucket).
+
+### Bước 2: Import dự án lên Vercel
+
+1. Truy cập [vercel.com](https://vercel.com) và đăng nhập.
+2. Nhấp **Add New Project** → chọn repo GitHub của dự án.
+3. Vercel tự nhận diện đây là dự án Next.js — không cần cấu hình thêm về framework.
+
+### Bước 3: Thiết lập Environment Variables
+
+Trong trang cài đặt dự án trên Vercel, thêm tất cả các biến môi trường sau:
+
+| Biến | Giá trị |
+| :--- | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL dự án Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service Role Key của Supabase |
+| `GOOGLE_CLIENT_ID` | Client ID từ Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | Client Secret từ Google Cloud Console |
+| `GOOGLE_REDIRECT_URI` | `https://<your-domain>.vercel.app/api/auth/google/callback` |
+| `ADMIN_PASSWORD` | Mật khẩu truy cập Dashboard |
+| `JWT_SECRET` | Chuỗi bí mật ký JWT session |
+| `ENCRYPTION_SECRET` | Chuỗi bí mật mã hóa refresh token trong DB |
+| `CHUNK_SIZE` | `1073741824` (1GB, hoặc điều chỉnh tuỳ ý) |
+
+### Bước 4: Cập nhật Google OAuth Redirect URI
+
+> **⚠️ Quan trọng**: Sau khi deploy, bạn **bắt buộc** phải truy cập [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials** → Chọn OAuth 2.0 Client ID tương ứng → Thêm URL sau vào danh sách **Authorized redirect URIs**:
+> ```
+> https://<your-domain>.vercel.app/api/auth/google/callback
+> ```
+> Nếu bỏ qua bước này, tính năng liên kết tài khoản Google Drive sẽ bị lỗi `redirect_uri_mismatch`.
+
+### Bước 5: Deploy
+
+Nhấp **Deploy**. Vercel sẽ tự động build và triển khai ứng dụng.
 
 ---
 
@@ -98,8 +146,8 @@ Truy cập [http://localhost:3000](http://localhost:3000) trên trình duyệt �
 
 Để đọc bản đánh giá kỹ thuật toàn diện từ góc nhìn của một **Senior Software Engineer**, bao gồm phân tích chi tiết về:
 1. Các quyết định thiết kế tối ưu hóa hiệu năng và bộ đệm (Caching).
-2. Lỗi logic phân bổ dung lượng dở dang (Allocation Flaws).
-3. Đánh giá rủi ro an ninh mạng khi phơi bày Access Token ra Client.
+2. Giải thuật phân bổ dung lượng ảo (Virtual Quota Allocation).
+3. Thiết kế bảo mật phân lớp xác thực và mã hóa token.
 4. Đánh giá chi tiết mức độ sẵn sàng vận hành thực tế (Honest Production Readiness).
 
-Vui lòng tham khảo tài liệu phân tích kỹ thuật tại: **[PROJECT_SUMMARY.md](file:///c:/Users/Dungx/Desktop/DungxDownload/PROJECT_SUMMARY.md)**.
+Vui lòng tham khảo tài liệu phân tích kỹ thuật tại: **[PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)**.

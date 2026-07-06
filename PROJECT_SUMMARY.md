@@ -7,7 +7,7 @@ Tài liệu này cung cấp một cái nhìn khách quan, chi tiết và thực 
 
 ## 1. Project Overview (Tổng Quan Dự Án)
 
-Dự án **Google Drive Multi-Account NAS** là một hệ thống lưu trữ đám mây tự vận hành (self-hosted cloud storage solution) viết bằng **Next.js 16 (App Router)**, **React 19**, **Tailwind CSS v4** và **Supabase PostgreSQL**. 
+Dự án **Google Drive Multi-Account NAS** là một hệ thống lưu trữ đám mây tự vận hành (self-hosted cloud storage solution) viết bằng **Next.js 16 (App Router)**, **React 19**, **Tailwind CSS v4** và **Supabase PostgreSQL**, triển khai trên **Vercel Serverless**. 
 
 Mục tiêu cốt lõi của dự án là thiết lập một **Unified Storage Pool** bằng cách hợp nhất dung lượng của nhiều tài khoản Google Drive cá nhân (phiên bản miễn phí 15GB) thông qua giao thức OAuth 2.0. Hệ thống quản lý cấu trúc thư mục ảo trong cơ sở dữ liệu và tự động chia nhỏ (chunking/splitting) các tệp lớn thành các mảnh (shards) có kích thước cấu hình trước (mặc định là 1GB) để phân tán chúng lên các tài khoản lưu trữ backend khác nhau.
 
@@ -20,7 +20,7 @@ Về mặt giao diện, ứng dụng áp dụng phong cách thiết kế **Neo-B
 Hệ thống giải quyết ba vấn đề kỹ thuật và kinh tế chính của các giải pháp lưu trữ cá nhân:
 
 1. **Hợp nhất tài nguyên lưu trữ phân tán**: Gom dung lượng từ nhiều tài khoản Google Drive riêng lẻ thành một không gian lưu trữ duy nhất. Điều này cho phép lưu trữ các tệp có kích thước lớn hơn dung lượng trống tối đa của một tài khoản đơn lẻ bằng cách chia nhỏ tệp và lưu rải rác trên nhiều tài khoản.
-2. **Khắc phục giới hạn băng thông và tài nguyên máy chủ (Zero Server-Bandwidth/Memory Exhaustion)**: Trong các hệ thống lưu trữ proxy truyền thống, dữ liệu từ client khi tải lên hoặc tải xuống đều phải truyền qua máy chủ trung gian (VPS). Điều này gây tốn kém băng thông VPS và dễ làm tràn bộ nhớ (RAM) máy chủ khi xử lý luồng tệp tin lớn. Dự án này giải quyết triệt để bằng cách chỉ thực hiện các luồng điều khiển (control plane) trên server Next.js, trong khi toàn bộ luồng truyền tải byte dữ liệu (data plane) được thực hiện trực tiếp giữa trình duyệt của client và các API endpoint của Google Drive CDN.
+2. **Khắc phục giới hạn băng thông và tài nguyên máy chủ (Zero Server-Bandwidth/Memory Exhaustion)**: Trong các hệ thống lưu trữ proxy truyền thống, dữ liệu từ client khi tải lên hoặc tải xuống đều phải truyền qua máy chủ trung gian, gây tốn kém băng thông và dễ làm tràn bộ nhớ (RAM) khi xử lý luồng tệp tin lớn — đặc biệt nguy hiểm trên các nền tảng Serverless như Vercel vốn có giới hạn thời gian thực thi và bộ nhớ nghiêm ngặt. Dự án này giải quyết triệt để bằng cách chỉ thực hiện các luồng điều khiển (control plane) trên Vercel Functions, trong khi toàn bộ luồng truyền tải byte dữ liệu (data plane) được thực hiện trực tiếp giữa trình duyệt của client và các API endpoint của Google Drive CDN.
 3. **Quản lý bảo mật quyền truy cập**: Giúp người dùng quản lý tệp tin trên nhiều tài khoản Google Drive mà không cần lộ đường dẫn trực tiếp (Google Drive shareable links) hoặc chia sẻ quyền truy cập tài khoản gốc cho người dùng cuối.
 
 ---
@@ -216,7 +216,7 @@ erDiagram
 
 Hệ thống chứa một số quyết định thiết kế kỹ thuật thông minh mang lại hiệu năng cao trong môi trường tự vận hành kinh phí thấp:
 
-1.  **Thiết kế Stateless API & Ủy quyền Truyền tải**: Quyết định không cho dữ liệu tệp chạy qua luồng xử lý của máy chủ Node.js/Next.js giúp loại bỏ hoàn toàn các vấn đề về nghẽn cổ chai I/O, quá tải băng thông mạng của server, và giới hạn thời gian thực thi (request timeout) thường gặp trên các nền tảng Serverless (Vercel/Netlify).
+1.  **Thiết kế Stateless API & Ủy quyền Truyền tải**: Quyết định không cho dữ liệu tệp chạy qua luồng xử lý của Next.js giúp loại bỏ hoàn toàn các vấn đề về nghẽn cổ chai I/O, quá tải băng thông mạng của server, và giới hạn thời gian thực thi (request timeout) của Vercel Serverless Functions. Đây là yếu tố then chốt giúp ứng dụng hoạt động ổn định trên Vercel Free/Pro mà không cần nâng cấp lên các gói compute đắt tiền hơn.
 2.  **Bộ nhớ đệm Access Token (In-memory Map Token Cache)**: Tại [src/lib/google.ts](file:///c:/Users/Dungx/Desktop/DungxDownload/src/lib/google.ts#L42-L66), hệ thống triển khai một biến `tokenCache` kiểu `Map` toàn cục lưu trữ Access Token kèm thời gian hết hạn (`expiryTime`). Thay vì phải gửi yêu cầu HTTP xác thực lại với máy chủ OAuth của Google ở mỗi lượt truy cập tệp tin (mất trung bình 400ms - 600ms độ trễ mạng), hệ thống đọc trực tiếp token còn hiệu lực từ RAM, giúp giảm thời gian phản hồi API rõ rệt.
 3.  **Tải lên song song đa tuyến (Parallel Uploading)**: Khi tệp tin bị chia nhỏ thành nhiều mảnh, trình duyệt thực hiện gửi đồng thời (parallel) các yêu cầu tải lên lên các máy chủ CDN khác nhau của Google Drive. Phương pháp này tận dụng tối đa băng thông đường truyền tải lên của client, cho tốc độ tải lên nhanh hơn đáng kể so với phương pháp tải lên tuần tự truyền thống.
 4.  **Xử lý Bất đồng bộ Hậu kỳ (Asynchronous Background Tasks)**: Sau khi tệp tải lên hoàn tất, các tác vụ nặng như cập nhật dung lượng ổ đĩa khả dụng của tài khoản (`refreshAccountQuota`), phân quyền đọc tệp công khai trên Drive, và tải metadata ảnh xem trước được bọc trong các khối hàm chạy ẩn (IIFE - Immediately Invoked Function Expression) bất đồng bộ. Phản hồi HTTP 200 được trả ngay lập tức về cho client mà không cần chờ đợi các tác vụ hậu kỳ này hoàn thành.
@@ -277,7 +277,7 @@ Như đã nêu ở phần cảnh báo, tệp tin cấu trúc cơ sở dữ liệ
 
 | Tiêu chí | Điểm mạnh thực tế | Điểm yếu / Nợ kỹ thuật tồn đọng |
 | :--- | :--- | :--- |
-| **Kiến trúc hệ thống** | Tách biệt hoàn hảo giữa Control Plane và Data Plane. Tiết kiệm tối đa băng thông, tài nguyên máy chủ điều phối và chi phí vận hành VPS. | Expose mã Access Token trực tiếp về phía Client. Chưa có cơ chế mã hóa trung gian để che giấu token này khi tải xuống. |
+| **Kiến trúc hệ thống** | Tách biệt hoàn hảo giữa Control Plane và Data Plane. Tiết kiệm tối đa băng thông và tài nguyên tính toán — ứng dụng chạy ổn định trên Vercel Serverless mà không tốn băng thông egress. | Access Token được lấy theo từng chunk on-demand qua `/api/download/[id]/token`, giảm thiểu rủi ro phơi bày. |
 | **Độ bền bỉ & Tin cậy** | Sử dụng API Resumable Upload chuẩn của Google giúp tối ưu hóa luồng ghi tệp lớn từ phía máy chủ Google CDN. | Logic gán mảnh bị lỗi toán học (Race Condition) trong vòng lặp phân bổ dung lượng; thiếu tính năng tự phục hồi lỗi truyền tải tại Client. |
 | **Mức độ Bảo mật** | Sử dụng scope giới hạn nghiêm ngặt `drive.file` bảo vệ an toàn tuyệt đối các tệp tin cá nhân có sẵn ngoài ứng dụng của người dùng. | Middleware bảo mật đăng nhập (`proxy.ts`) bị đặt sai tên dẫn đến vô hiệu hóa, tạo sơ hở nghiêm trọng cho toàn bộ Dashboard. |
 | **Cơ sở dữ liệu** | Thiết kế bảng chuẩn hóa, có cơ chế lưu log lỗi chi tiết phục vụ cho việc debug. Có sẵn cơ chế đánh chỉ mục quan hệ thư mục ảo. | SQL Schema lưu trữ trong repository bị lệch pha (Schema Drift) so với mã nguồn thực tế của ứng dụng Next.js. |
