@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   FileDown, 
   HardDrive, 
@@ -76,6 +76,22 @@ export function FileList({
 
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkConfirming, setBulkConfirming] = useState(false);
+  
+  // Navigation State
+  const [navigatingId, setNavigatingId] = useState<string | 'root' | null>(null);
+
+  useEffect(() => {
+    setNavigatingId(null);
+  }, [currentFolderId]);
+
+  const handleNavigateFolder = (folderId: string | null) => {
+    setNavigatingId(folderId || 'root');
+    if (folderId) {
+      router.push(`/dashboard/files?folder=${folderId}`);
+    } else {
+      router.push('/dashboard/files');
+    }
+  };
 
   // Drag and Drop States
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
@@ -446,21 +462,21 @@ export function FileList({
       {/* Breadcrumbs Navigation */}
       <div className="bg-canvas border-2 border-black rounded-xl p-3.5 shadow-[3px_3px_0px_#000000] flex items-center gap-2 flex-wrap text-sm font-heading font-bold text-black">
         <button
-          onClick={() => router.push('/dashboard/files')}
+          onClick={() => handleNavigateFolder(null)}
           className="hover:text-brand-pink transition-colors cursor-pointer flex items-center gap-1.5 focus:outline-none"
         >
-          <HardDrive className="w-4 h-4 text-black" /> Root
+          {navigatingId === 'root' ? <Loader2 className="w-4 h-4 text-black animate-spin" /> : <HardDrive className="w-4 h-4 text-black" />} Root
         </button>
         
         {breadcrumbs && breadcrumbs.map((bc, idx) => (
           <div key={bc.id} className="flex items-center gap-2">
             <ChevronRight className="w-4 h-4 text-[#5a5a5a]" />
             <button
-              onClick={() => router.push(`/dashboard/files?folder=${bc.id}`)}
-              className={`hover:text-brand-pink transition-colors cursor-pointer truncate max-w-[150px] focus:outline-none ${idx === breadcrumbs.length - 1 ? 'font-black text-black' : ''}`}
+              onClick={() => handleNavigateFolder(bc.id)}
+              className={`hover:text-brand-pink transition-colors cursor-pointer flex items-center gap-1.5 truncate max-w-[150px] focus:outline-none ${idx === breadcrumbs.length - 1 ? 'font-black text-black' : ''}`}
               title={bc.name}
             >
-              {bc.name}
+              {navigatingId === bc.id && <Loader2 className="w-3 h-3 animate-spin inline-block" />} {bc.name}
             </button>
           </div>
         ))}
@@ -507,7 +523,7 @@ export function FileList({
                         onDrop={isFolder ? (e) => handleDrop(e, file.id) : undefined}
                         onDoubleClick={() => {
                           if (isFolder) {
-                            router.push(`/dashboard/files?folder=${file.id}`);
+                            handleNavigateFolder(file.id);
                           } else {
                             setPreviewFile(file);
                           }
@@ -539,7 +555,13 @@ export function FileList({
                                 backgroundColor: file.thumbnail_url ? '#ffffff' : fileIconInfo.bgColor 
                               }}
                             >
-                              {!file.thumbnail_url && <Icon className="w-5 h-5 stroke-[2]" style={{ color: fileIconInfo.textColor }} />}
+                              {!file.thumbnail_url && (
+                                navigatingId === file.id ? (
+                                  <Loader2 className="w-5 h-5 animate-spin text-black" />
+                                ) : (
+                                  <Icon className="w-5 h-5 stroke-[2]" style={{ color: fileIconInfo.textColor }} />
+                                )
+                              )}
                             </div>
                             <div className="min-w-0 flex-1">
                               {isBeingRenamed ? (
@@ -563,7 +585,7 @@ export function FileList({
                                 <div className="flex items-center gap-2 group/title">
                                   {isFolder ? (
                                     <button 
-                                      onClick={() => router.push(`/dashboard/files?folder=${file.id}`)}
+                                      onClick={() => handleNavigateFolder(file.id)}
                                       className="text-sm font-heading font-black text-black hover:text-brand-pink text-left truncate hover:underline focus:outline-none"
                                       title={file.original_file_name}
                                     >
@@ -668,14 +690,14 @@ export function FileList({
                   // Prevent selection if clicking inside actions menu or renaming input
                   if ((e.target as HTMLElement).closest('.file-actions') || isBeingRenamed) return;
                   if (isFolder) {
-                    router.push(`/dashboard/files?folder=${file.id}`);
+                    handleNavigateFolder(file.id);
                   } else {
                     toggleSelection(file.id);
                   }
                 }}
                 onDoubleClick={() => {
                   if (isFolder) {
-                    router.push(`/dashboard/files?folder=${file.id}`);
+                    handleNavigateFolder(file.id);
                   } else {
                     setPreviewFile(file);
                   }
@@ -704,7 +726,13 @@ export function FileList({
                     backgroundColor: file.thumbnail_url ? '#ffffff' : fileIconInfo.bgColor 
                   }}
                 >
-                  {!file.thumbnail_url && <Icon className="w-10 h-10 stroke-[1.5]" style={{ color: fileIconInfo.textColor }} />}
+                  {!file.thumbnail_url && (
+                    navigatingId === file.id ? (
+                      <Loader2 className="w-10 h-10 animate-spin text-black" />
+                    ) : (
+                      <Icon className="w-10 h-10 stroke-[1.5]" style={{ color: fileIconInfo.textColor }} />
+                    )
+                  )}
                 </div>
 
                 {/* File Details */}
