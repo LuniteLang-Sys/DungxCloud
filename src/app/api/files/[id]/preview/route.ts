@@ -63,6 +63,19 @@ export async function GET(request: NextRequest, context: { params: Promise<any> 
     // 2. Initialize Google Drive client
     const drive = getDriveClient(refreshToken);
 
+    // 3. Grant public read permission to the file part so it can be previewed without login block
+    try {
+      await drive.permissions.create({
+        fileId: googleDriveFileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+      });
+    } catch (permError: any) {
+      console.warn('Failed to grant public read permission to file part:', permError.message || permError);
+    }
+
     // 4. Retrieve webViewLink and thumbnailLink from Google Drive API
     const driveFile = await drive.files.get({
       fileId: googleDriveFileId,
