@@ -10,36 +10,40 @@ Dự án được xây dựng trên **Next.js 16 + Supabase**, triển khai trê
 
 ```mermaid
 graph TD
-    subgraph Client [Trình Duyệt Khách]
-        FE[React 19 SPA / Next.js Client]
-        SS[StreamSaver.js / Service Worker]
-        XHR[Parallel XMLHttpRequests]
+    subgraph Client["Client Layer - Browser"]
+        FE["React 19 SPA / Next.js Client"]
+        SS["StreamSaver.js / Service Worker"]
+        XHR["Parallel XMLHttpRequest Workers"]
     end
 
-    subgraph Server [Vercel Serverless Functions]
-        API[Stateless API Routes / Control Plane]
-        TC[In-memory Token Cache]
+    subgraph Server["Server Layer - Next.js Control Plane"]
+        API["Stateless API Routes"]
+        TC["In-memory Token Cache"]
     end
 
-    subgraph DB [Cơ Sở Dữ Liệu]
+    subgraph DB["Database Layer"]
         Supa[(Supabase PostgreSQL)]
     end
 
-    subgraph Storage [Google Drive Backend]
-        GD1[Drive Account 1]
-        GD2[Drive Account 2]
+    subgraph Storage["Storage Backend"]
+        GD1["Google Drive Account A"]
+        GD2["Google Drive Account B"]
+        GD3["Google Drive Account C"]
     end
 
-    %% Control Flows
-    FE <--> |API Calls| API
-    API <--> |Metadata Query| Supa
-    API -.-> |OAuth 2.0 Credentials Refresh| Storage
+    FE <--> |API requests / JSON| API
+    API <--> |Metadata Queries| Supa
+    API -.-> |OAuth 2.0 Credentials Refresh| GD1
+    API -.-> |OAuth 2.0 Credentials Refresh| GD2
+    API -.-> |OAuth 2.0 Credentials Refresh| GD3
 
-    %% Data Flows (Bypassing Server)
-    XHR ==> |Direct Resumable PUT Upload| GD1
-    XHR ==> |Direct Resumable PUT Upload| GD2
-    SS <== |Direct GET Stream Download| GD1
-    SS <== |Direct GET Stream Download| GD2
+    XHR -->|Direct Resumable PUT Upload| GD1
+    XHR -->|Direct Resumable PUT Upload| GD2
+    XHR -->|Direct Resumable PUT Upload| GD3
+
+    GD1 -->|Direct GET Stream Download| SS
+    GD2 -->|Direct GET Stream Download| SS
+    GD3 -->|Direct GET Stream Download| SS
 ```
 
 ---
